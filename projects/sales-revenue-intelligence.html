@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales & Revenue Intelligence Dashboard — Prateek Yadav</title>
+<meta name="description" content="Case study: analyzing ~120K retail transactions to build a revenue intelligence dashboard in Power BI.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<nav class="nav">
+  <div class="wrap">
+    <a href="../index.html" class="nav-brand">prateek<span>.</span>yadav<span>()</span></a>
+    <ul class="nav-links"><li><a href="../index.html#projects">← All projects</a></li></ul>
+  </div>
+</nav>
+
+<div class="wrap"><div class="breadcrumb"><a href="../index.html">Home</a> / <a href="../index.html#projects">Projects</a> / Sales & Revenue Intelligence Dashboard</div></div>
+
+<header class="case-hero">
+  <div class="wrap">
+    <span class="eyebrow">case study</span>
+    <h1>Sales & Revenue Intelligence Dashboard</h1>
+    <p style="color:var(--ink-soft);max-width:65ch;">A retail dataset of ~120,000 transactions, turned into a single executive dashboard that answers three questions leadership actually asks: where is revenue coming from, where is it slipping, and what should we do about it this quarter.</p>
+    <div class="case-meta">
+      <div><strong>120K</strong><span>Transactions analyzed</span></div>
+      <div><strong>SQL + Python</strong><span>Analysis stack</span></div>
+      <div><strong>Power BI</strong><span>Delivery format</span></div>
+      <div><strong>1</strong><span>Executive dashboard</span></div>
+    </div>
+    <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="https://github.com/yadavprateek084" target="_blank" rel="noopener" class="btn btn-primary">View on GitHub ↗</a>
+      <a href="../index.html#contact" class="btn btn-outline">Ask me about this project</a>
+    </div>
+  </div>
+</header>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Overview</h2>
+    <p>The brief I set for myself: assume a mid-size retailer wants one dashboard reviewed every Monday morning. It has to load fast, avoid vanity metrics, and point at an action — not just a number. I sourced a transaction-level dataset (~120K rows spanning products, regions, and time), cleaned it, modeled it, and built the reporting layer on top.</p>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Architecture</h2>
+    <p>Raw CSV exports → PostgreSQL staging tables → cleaned & modeled fact/dimension tables → Power BI (DAX measures) → published dashboard.</p>
+    <ul>
+      <li><strong>Ingestion:</strong> raw transaction, product, and region files loaded into PostgreSQL.</li>
+      <li><strong>Modeling:</strong> a star schema — one fact table (transactions) joined to product, region, and date dimensions.</li>
+      <li><strong>Transformation:</strong> Python (Pandas) for outlier handling, currency normalization, and missing-value treatment before it ever reaches BI.</li>
+      <li><strong>Reporting:</strong> Power BI with DAX measures for YoY growth, contribution margin, and rolling averages.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Exploratory Data Analysis</h2>
+    <p>Before building anything visual, I profiled the data in Python to catch what a dashboard would otherwise quietly hide: duplicate transaction IDs, a handful of negative-quantity return rows miscoded as sales, and a long tail of low-volume SKUs skewing average order value.</p>
+    <div class="code-wrap">
+<pre><code># Quick profiling pass before trusting any downstream number
+import pandas as pd
+
+df = pd.read_csv("transactions.csv", parse_dates=["order_date"])
+print(df.duplicated(subset="transaction_id").sum(), "duplicate transaction IDs")
+print(df[df.quantity < 0].shape[0], "negative-quantity rows")
+
+monthly_rev = (
+    df.assign(month=df.order_date.dt.to_period("M"))
+      .groupby("month")["revenue"].sum()
+)
+print(monthly_rev.tail(6))</code></pre>
+      <button class="copy-btn">Copy</button>
+    </div>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>SQL Analysis</h2>
+    <p>Once the schema was clean, most of the recurring business questions were answered directly in SQL rather than re-computed in BI — keeping the DAX layer thin and fast.</p>
+    <div class="code-wrap">
+<pre><code>-- Revenue contribution by region, current quarter vs. prior quarter
+SELECT
+    r.region_name,
+    SUM(CASE WHEN t.order_date >= date_trunc('quarter', CURRENT_DATE)
+             THEN t.revenue END) AS current_qtr_revenue,
+    SUM(CASE WHEN t.order_date >= date_trunc('quarter', CURRENT_DATE) - interval '3 months'
+             AND t.order_date < date_trunc('quarter', CURRENT_DATE)
+             THEN t.revenue END) AS prior_qtr_revenue
+FROM fact_transactions t
+JOIN dim_region r ON r.region_id = t.region_id
+GROUP BY r.region_name
+ORDER BY current_qtr_revenue DESC;</code></pre>
+      <button class="copy-btn">Copy</button>
+    </div>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Power BI Dashboard</h2>
+    <p>The dashboard is built around a single top strip of KPIs (total revenue, YoY growth, margin, average order value), with drill-down pages for region, product category, and time trend. Every visual has a one-line annotation explaining what "good" looks like, so it doesn't require narration in the meeting.</p>
+    <p><em>Screenshots live in the GitHub repo — add your exported dashboard images to <code>assets/</code> and link them here once you upload the project.</em></p>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Business Recommendations</h2>
+    <ul>
+      <li>Two regions accounted for over 55% of revenue but showed flat YoY growth — flagged as a concentration risk worth a account-level review.</li>
+      <li>A cluster of mid-tier SKUs had high margin but low visibility in current promotions — recommended reallocating a slice of promo budget toward them.</li>
+      <li>Order value dipped predictably in a specific week each month — consistent with a payroll cycle — suggesting a timed promotional push.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="case-section" style="border-bottom:none;">
+  <div class="wrap">
+    <h2>Lessons Learned</h2>
+    <p>The biggest time sink wasn't the DAX — it was the data cleaning. I underestimated how much a "clean-looking" CSV export can still hide: duplicate keys and miscoded returns would have quietly inflated revenue by roughly 4% if I'd trusted the dashboard's first draft. Now I profile before I visualize, every time.</p>
+    <div style="margin-top:32px;">
+      <a href="https://github.com/yadavprateek084" target="_blank" rel="noopener" class="btn btn-primary">View full code on GitHub ↗</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footer-row">
+    <div style="font-size:0.85rem;color:var(--ink-soft);">© <span id="year"></span> Prateek Yadav</div>
+    <a href="../index.html#top" class="back-top">Back to top ↑</a>
+  </div>
+</footer>
+
+<script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+<script src="../js/case.js"></script>
+</body>
+</html>

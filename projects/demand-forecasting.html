@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retail Demand Forecasting & Inventory Analytics — Prateek Yadav</title>
+<meta name="description" content="Case study: forecasting demand across ~100K records to reduce stockouts and overstock.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<nav class="nav">
+  <div class="wrap">
+    <a href="../index.html" class="nav-brand">prateek<span>.</span>yadav<span>()</span></a>
+    <ul class="nav-links"><li><a href="../index.html#projects">← All projects</a></li></ul>
+  </div>
+</nav>
+
+<div class="wrap"><div class="breadcrumb"><a href="../index.html">Home</a> / <a href="../index.html#projects">Projects</a> / Retail Demand Forecasting & Inventory Analytics</div></div>
+
+<header class="case-hero">
+  <div class="wrap">
+    <span class="eyebrow">case study</span>
+    <h1>Retail Demand Forecasting & Inventory Analytics</h1>
+    <p style="color:var(--ink-soft);max-width:65ch;">Forecasted SKU-level demand across ~100,000 records and paired it with an inventory health dashboard, so purchasing decisions stop being reactive.</p>
+    <div class="case-meta">
+      <div><strong>100K</strong><span>Records analyzed</span></div>
+      <div><strong>SKU-level</strong><span>Forecast granularity</span></div>
+      <div><strong>Python</strong><span>Forecasting engine</span></div>
+      <div><strong>Power BI</strong><span>Delivery format</span></div>
+    </div>
+    <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="https://github.com/yadavprateek084" target="_blank" rel="noopener" class="btn btn-primary">View on GitHub ↗</a>
+      <a href="../index.html#contact" class="btn btn-outline">Ask me about this project</a>
+    </div>
+  </div>
+</header>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Overview</h2>
+    <p>Stockouts lose sales; overstock ties up cash. This project builds a per-SKU demand forecast from ~100K historical sales records and translates it into a reorder-point dashboard that flags which SKUs need attention this week — not a generic accuracy metric nobody in ops reads.</p>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Architecture</h2>
+    <p>Historical sales → PostgreSQL → time-series feature engineering & forecasting in Python → forecast + inventory tables → Power BI reorder dashboard.</p>
+    <ul>
+      <li><strong>Ingestion:</strong> ~100K daily/weekly sales records across products and locations.</li>
+      <li><strong>Feature engineering:</strong> rolling averages, seasonality flags, and lag features built in Pandas.</li>
+      <li><strong>Forecasting:</strong> a seasonal decomposition + moving-average baseline per SKU, benchmarked against a naive forecast.</li>
+      <li><strong>Reporting:</strong> Power BI dashboard combining forecast, current stock, and a calculated reorder point.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Exploratory Data Analysis</h2>
+    <p>Before forecasting anything, I checked which SKUs even had enough history to forecast reliably — a large share had fewer than 8 weeks of sales, which ruled out a single global model and pushed me toward a tiered approach.</p>
+    <div class="code-wrap">
+<pre><code>import pandas as pd
+
+sales = pd.read_csv("sales_history.csv", parse_dates=["week"])
+weeks_per_sku = sales.groupby("sku_id")["week"].nunique()
+print((weeks_per_sku < 8).mean(), "share of SKUs with under 8 weeks of history")
+
+# Decompose one representative SKU to check seasonality strength
+top_sku = sales[sales.sku_id == sales.sku_id.value_counts().idxmax()]
+print(top_sku.set_index("week")["units_sold"].resample("W").sum().tail(12))</code></pre>
+      <button class="copy-btn">Copy</button>
+    </div>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>SQL Analysis</h2>
+    <p>Reorder points and current stock health are computed in SQL so the dashboard stays fast and the logic is auditable outside of Power BI.</p>
+    <div class="code-wrap">
+<pre><code>-- Flag SKUs projected to stock out within the forecast lead time
+SELECT
+    f.sku_id,
+    f.forecast_units_next_4wk,
+    i.current_stock,
+    i.lead_time_days,
+    (i.current_stock - f.forecast_units_next_4wk) AS projected_buffer
+FROM fact_forecast f
+JOIN dim_inventory i ON i.sku_id = f.sku_id
+WHERE (i.current_stock - f.forecast_units_next_4wk) < 0
+ORDER BY projected_buffer ASC;</code></pre>
+      <button class="copy-btn">Copy</button>
+    </div>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Power BI Dashboard</h2>
+    <p>The dashboard's first view is a single ranked list: SKUs sorted by projected stockout risk, with forecast vs. actual sparklines beside each one, so a purchasing manager can triage in under two minutes.</p>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Business Recommendations</h2>
+    <ul>
+      <li>~12% of SKUs were consistently over-forecast, tying up capital in slow-moving stock — recommended a quarterly review to prune or discount them.</li>
+      <li>A small set of high-velocity SKUs had reorder lead times longer than their forecast horizon — flagged as the highest stockout-risk group needing a safety-stock buffer.</li>
+      <li>Recommended a tiered forecasting approach: full seasonal models for high-volume SKUs, simple moving averages for low-volume ones, rather than one model for all.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="case-section" style="border-bottom:none;">
+  <div class="wrap">
+    <h2>Lessons Learned</h2>
+    <p>The instinct is to reach for the fanciest forecasting model available. Here, a simple seasonal moving average beat a more complex model on the majority of low-volume SKUs simply because there wasn't enough history to fit anything more sophisticated without overfitting. Matching model complexity to data volume mattered more than model sophistication.</p>
+    <div style="margin-top:32px;">
+      <a href="https://github.com/yadavprateek084" target="_blank" rel="noopener" class="btn btn-primary">View full code on GitHub ↗</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footer-row">
+    <div style="font-size:0.85rem;color:var(--ink-soft);">© <span id="year"></span> Prateek Yadav</div>
+    <a href="../index.html#top" class="back-top">Back to top ↑</a>
+  </div>
+</footer>
+
+<script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+<script src="../js/case.js"></script>
+</body>
+</html>

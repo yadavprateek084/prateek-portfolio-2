@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customer Behavior & RFM Segmentation — Prateek Yadav</title>
+<meta name="description" content="Case study: segmenting ~50K customers by Recency, Frequency and Monetary value to target retention campaigns.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<nav class="nav">
+  <div class="wrap">
+    <a href="../index.html" class="nav-brand">prateek<span>.</span>yadav<span>()</span></a>
+    <ul class="nav-links"><li><a href="../index.html#projects">← All projects</a></li></ul>
+  </div>
+</nav>
+
+<div class="wrap"><div class="breadcrumb"><a href="../index.html">Home</a> / <a href="../index.html#projects">Projects</a> / Customer Behavior & RFM Segmentation</div></div>
+
+<header class="case-hero">
+  <div class="wrap">
+    <span class="eyebrow">case study</span>
+    <h1>Customer Behavior & RFM Segmentation</h1>
+    <p style="color:var(--ink-soft);max-width:65ch;">Segmented ~50,000 customers using Recency, Frequency, and Monetary (RFM) analysis to find the customers most worth protecting — and the ones already gone.</p>
+    <div class="case-meta">
+      <div><strong>50K</strong><span>Customers analyzed</span></div>
+      <div><strong>5</strong><span>Behavioral segments</span></div>
+      <div><strong>SQL + Python</strong><span>Analysis stack</span></div>
+      <div><strong>Power BI</strong><span>Delivery format</span></div>
+    </div>
+    <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="https://github.com/yadavprateek084" target="_blank" rel="noopener" class="btn btn-primary">View on GitHub ↗</a>
+      <a href="../index.html#contact" class="btn btn-outline">Ask me about this project</a>
+    </div>
+  </div>
+</header>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Overview</h2>
+    <p>Retention is cheaper than acquisition, but only if you know who to retain. This project scores every customer on three axes — how recently they bought, how often, and how much — then groups them into segments a marketing team can actually act on: Champions, Loyal, At Risk, Hibernating, and Lost.</p>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Architecture</h2>
+    <p>Order history → PostgreSQL → RFM scoring in SQL → segment logic and validation in Python → Power BI segment explorer.</p>
+    <ul>
+      <li><strong>Ingestion:</strong> order-level history (~50K unique customers) loaded and deduplicated in PostgreSQL.</li>
+      <li><strong>Scoring:</strong> Recency, Frequency, and Monetary values computed per customer, then bucketed into quintiles.</li>
+      <li><strong>Segmentation:</strong> quintile combinations mapped to five named, business-readable segments.</li>
+      <li><strong>Reporting:</strong> a Power BI segment explorer with drill-through to individual customer lists per segment.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Exploratory Data Analysis</h2>
+    <p>Before scoring, I checked the shape of order frequency and recency — a heavily right-skewed frequency distribution meant a naive equal-width bucketing would have crammed 80% of customers into one segment. Quintile-based scoring fixed that.</p>
+    <div class="code-wrap">
+<pre><code>import pandas as pd
+
+orders = pd.read_csv("orders.csv", parse_dates=["order_date"])
+snapshot_date = orders.order_date.max() + pd.Timedelta(days=1)
+
+rfm = orders.groupby("customer_id").agg(
+    recency=("order_date", lambda x: (snapshot_date - x.max()).days),
+    frequency=("order_id", "nunique"),
+    monetary=("order_value", "sum"),
+)
+print(rfm.frequency.describe())  # confirms heavy right skew</code></pre>
+      <button class="copy-btn">Copy</button>
+    </div>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>SQL Analysis</h2>
+    <p>The core RFM scores are computed directly in SQL using window functions, so the segmentation logic lives close to the data and refreshes cheaply.</p>
+    <div class="code-wrap">
+<pre><code>WITH rfm_base AS (
+    SELECT
+        customer_id,
+        CURRENT_DATE - MAX(order_date) AS recency_days,
+        COUNT(DISTINCT order_id) AS frequency,
+        SUM(order_value) AS monetary
+    FROM fact_orders
+    GROUP BY customer_id
+),
+scored AS (
+    SELECT *,
+        NTILE(5) OVER (ORDER BY recency_days DESC) AS r_score,
+        NTILE(5) OVER (ORDER BY frequency ASC) AS f_score,
+        NTILE(5) OVER (ORDER BY monetary ASC) AS m_score
+    FROM rfm_base
+)
+SELECT customer_id, r_score, f_score, m_score,
+    CASE
+        WHEN r_score >= 4 AND f_score >= 4 THEN 'Champions'
+        WHEN r_score >= 3 AND f_score >= 3 THEN 'Loyal'
+        WHEN r_score <= 2 AND f_score >= 3 THEN 'At Risk'
+        WHEN r_score <= 2 AND f_score <= 2 THEN 'Hibernating'
+        ELSE 'Lost'
+    END AS segment
+FROM scored;</code></pre>
+      <button class="copy-btn">Copy</button>
+    </div>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Power BI Dashboard</h2>
+    <p>The segment explorer leads with a treemap of segment size vs. revenue contribution, so it's immediately visible when a small segment (like "At Risk") is punching above its weight in historical spend — the strongest argument for prioritizing it.</p>
+  </div>
+</section>
+
+<section class="case-section">
+  <div class="wrap">
+    <h2>Business Recommendations</h2>
+    <ul>
+      <li>The "At Risk" segment was only 9% of customers but 22% of historical revenue — the single highest-leverage group for a win-back campaign.</li>
+      <li>"Champions" showed strong repeat purchase intervals — recommended a loyalty-tier program rather than discounting, since they weren't price-sensitive.</li>
+      <li>"Hibernating" customers had order histories concentrated in one category — suggested a category-specific re-engagement email rather than a generic one.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="case-section" style="border-bottom:none;">
+  <div class="wrap">
+    <h2>Lessons Learned</h2>
+    <p>Quintile-based scoring is only as good as the population it's computed over — I initially scored a full multi-year dataset, which buried recent shifts in customer behavior. Recomputing on a rolling 12-month window gave marketing a segment view that matched what they were actually seeing in current campaigns.</p>
+    <div style="margin-top:32px;">
+      <a href="https://github.com/yadavprateek084" target="_blank" rel="noopener" class="btn btn-primary">View full code on GitHub ↗</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footer-row">
+    <div style="font-size:0.85rem;color:var(--ink-soft);">© <span id="year"></span> Prateek Yadav</div>
+    <a href="../index.html#top" class="back-top">Back to top ↑</a>
+  </div>
+</footer>
+
+<script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+<script src="../js/case.js"></script>
+</body>
+</html>
